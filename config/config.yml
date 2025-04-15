@@ -1,0 +1,14 @@
+env: "dev"
+http_server:
+ host: "localhost"
+ port: 8887
+ trusted_proxies: ["127.0.0.1"]
+twilio:
+  account_sid: ""
+  api_key: ""
+  api_secret: ""
+  app_sid: ""
+  auth_token: ""
+elevenlabs: 
+  api_key: ""
+  agent_id: ""
