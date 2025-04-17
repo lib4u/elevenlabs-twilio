@@ -162,7 +162,6 @@ func (h *Handler) OutboundCallStream(c *gin.Context) {
 		case "stop":
 			logger.Debug("[Twilio] Stream stopped", logger.String("id", streamSid))
 			cancel()
-
 			return
 		}
 	}
