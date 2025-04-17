@@ -9,6 +9,7 @@ import (
 type Config struct {
 	Env        string `yaml:"env" envDefault:"development"`
 	HTTPServer `yaml:"http_server"`
+	WebSocket  `yaml:"web_socket"`
 	Twilio     `yaml:"twilio"`
 	Elevenlabs `yaml:"elevenlabs"`
 }
@@ -17,6 +18,10 @@ type HTTPServer struct {
 	Port           int      `yaml:"port"`
 	Host           string   `yaml:"host"`
 	TrustedProxies []string `yaml:"trusted_proxies"`
+}
+
+type WebSocket struct {
+	ReadLimit int64 `yaml:"read_limit"`
 }
 
 type Twilio struct {

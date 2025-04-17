@@ -10,10 +10,7 @@ import (
 	websocket "ai-calls/internal/server/utils/webSocket"
 
 	"github.com/gin-gonic/gin"
-	jsoniter "github.com/json-iterator/go"
 )
-
-var json = jsoniter.ConfigCompatibleWithStandardLibrary
 
 type ElevenLabsMessage struct {
 	Type           string          `json:"type"`
@@ -31,6 +28,10 @@ type PingEvent struct {
 
 type Audio struct {
 	Chunk string `json:"chunk"`
+}
+
+type UserAudioChunk struct {
+	Chunk string `json:"user_audio_chunk"`
 }
 
 type AudioEvent struct {
@@ -105,7 +106,7 @@ func (h *Handler) OutboundCallStream(c *gin.Context) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	sysStatus := systemStatus.New(h.App)
-	twilioConn, err := websocket.Upgrade(c.Writer, c.Request, nil)
+	twilioConn, err := websocket.NewServer(h.App.Config, c.Writer, c.Request, nil)
 	twilioConn.SetConnectName(TwilioWs)
 	if err != nil {
 		logger.Error("WebSocket upgrade failed:", logger.Any("err", err))
@@ -120,7 +121,7 @@ func (h *Handler) OutboundCallStream(c *gin.Context) {
 
 	eleven := elevenlabs.New(h.App)
 	signedUrl, _ := eleven.GetSignedUrl()
-	elevenLabsConn, _, err := websocket.NewWebSocketConnect(ctx, signedUrl, nil)
+	elevenLabsConn, _, err := websocket.NewClient(h.App.Config, ctx, signedUrl, nil)
 	elevenLabsConn.SetConnectName(ElevenLabsWs)
 	if err != nil {
 		logger.Error("[ElevenLabs] connection error:", logger.Any("err", err))
@@ -131,31 +132,13 @@ func (h *Handler) OutboundCallStream(c *gin.Context) {
 
 	go handleElevenLabsMessages(ctx, elevenLabsConn, twilioConn, &streamSid)
 
-	audioChan := make(chan string, 100)
-
-	go func() {
-		for chunk := range audioChan {
-			audio := map[string]string{
-				"user_audio_chunk": chunk,
-			}
-			data, _ := json.Marshal(audio)
-			elevenLabsConn.WriteMessage(ctx, data)
-		}
-	}()
-
 	for {
-		_, msg, err := twilioConn.ReadMessage(ctx)
+		var m MessageFromTwilio
+		err := twilioConn.ReadJsonMessage(ctx, &m)
 		if err != nil {
 			logger.Error("[Twilio] Read error:", logger.Any("err", err))
 			cancel()
 			break
-		}
-
-		var m MessageFromTwilio
-		err = json.Unmarshal(msg, &m)
-		if err != nil {
-			logger.Error("[Twilio] JSON parse error:", logger.Any("err", err))
-			continue
 		}
 
 		switch m.Event {
@@ -168,13 +151,18 @@ func (h *Handler) OutboundCallStream(c *gin.Context) {
 
 		case "media":
 			if elevenLabsConn != nil {
-				audioChan <- m.Media.Payload
+				go func() {
+					audio := UserAudioChunk{
+						Chunk: m.Media.Payload,
+					}
+					elevenLabsConn.WriteJsonMessage(ctx, audio)
+				}()
 			}
 
 		case "stop":
 			logger.Debug("[Twilio] Stream stopped", logger.String("id", streamSid))
 			cancel()
-			close(audioChan)
+
 			return
 		}
 	}
@@ -196,12 +184,11 @@ func sendInitialConfig(ctx context.Context, h *Handler, conn *websocket.SafeConn
 			},
 		},
 	}
-	data, err := json.Marshal(config)
+	err := conn.WriteJsonMessage(ctx, config)
 	if err != nil {
-		logger.Error("Initial Config Marshal error:", logger.Any("err", err))
+		logger.Error("Initial Config error:", logger.Any("err", err))
 		return
 	}
-	conn.WriteMessage(ctx, data)
 }
 
 func handleElevenLabsMessages(ctx context.Context, elevenConn *websocket.SafeConn, twilioConn *websocket.SafeConn, streamSid *string) {
@@ -211,48 +198,44 @@ func handleElevenLabsMessages(ctx context.Context, elevenConn *websocket.SafeCon
 			logger.Debug("[ElevenLabs] Goroutine stopped by context")
 			return
 		default:
-			_, msg, err := elevenConn.ReadMessage(ctx)
+			var payload ElevenLabsMessage
+			err := elevenConn.ReadJsonMessage(ctx, &payload)
 			if err != nil {
 				logger.Error("[ElevenLabs] Read error:", logger.Any("err", err))
 				closeConnectionService(ctx, twilioConn)
 				return
 			}
 
-			var payload ElevenLabsMessage
-			if err := json.Unmarshal(msg, &payload); err != nil {
-				logger.Error("[ElevenLabs] Invalid message:", logger.Any("err", err))
-				continue
-			}
-
 			switch payload.Type {
 			case "audio":
 				if *streamSid != "" {
-					media := MediaMessage{
-						Event:     "media",
-						StreamSid: *streamSid,
-						Media: MediaPayload{
-							Payload: extractAudioChunk(&payload),
-						},
-					}
-					jsonData, _ := json.Marshal(media)
-					twilioConn.WriteMessage(ctx, jsonData)
+					go func() {
+						media := MediaMessage{
+							Event:     "media",
+							StreamSid: *streamSid,
+							Media: MediaPayload{
+								Payload: extractAudioChunk(&payload),
+							},
+						}
+						twilioConn.WriteJsonMessage(ctx, media)
+					}()
 				}
 			case "ping":
 				pong := PongMessage{
 					Type:    "pong",
 					EventID: payload.PingEvent.EventID,
 				}
-				pongMsg, _ := json.Marshal(pong)
-				elevenConn.WriteMessage(ctx, pongMsg)
+				elevenConn.WriteJsonMessage(ctx, pong)
 			case "interruption":
 				if *streamSid != "" {
-					logger.Debug("[ElevenLabs] interruption")
-					media := ClearMessage{
-						Event:     "clear",
-						StreamSid: *streamSid,
-					}
-					jsonData, _ := json.Marshal(media)
-					twilioConn.WriteMessage(ctx, jsonData)
+					go func() {
+						logger.Debug("[ElevenLabs] interruption")
+						media := ClearMessage{
+							Event:     "clear",
+							StreamSid: *streamSid,
+						}
+						twilioConn.WriteJsonMessage(ctx, media)
+					}()
 				}
 			case "agent_response":
 				logger.Debug("[Agent] response", logger.String("text", payload.AgentResponse.AgentResponse))

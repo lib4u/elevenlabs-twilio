@@ -9,10 +9,7 @@ import (
 )
 
 func main() {
-	var configPath, ok = os.LookupEnv("AI_CALLS_CONF")
-	if !ok {
-		panic("AI_CALLS_CONF Config path not found")
-	}
+	var configPath = getConfigPath()
 
 	config := config.Load(configPath)
 
@@ -23,4 +20,17 @@ func main() {
 	app := app.New(&config)
 
 	api.New(app)
+}
+
+func getConfigPath() string {
+	defaultConfigName := "config.yml"
+	var configPath, ok = os.LookupEnv("AI_CALLS_CONF")
+	if !ok {
+		_, err := os.Stat(defaultConfigName)
+		if os.IsNotExist(err) {
+			panic("AI_CALLS_CONF Config path not found")
+		}
+		return defaultConfigName
+	}
+	return configPath
 }

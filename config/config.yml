@@ -3,6 +3,8 @@ http_server:
  host: "localhost"
  port: 8887
  trusted_proxies: ["127.0.0.1"]
+web_socket:
+  read_limit: 150000000
 twilio:
   account_sid: ""
   api_key: ""
