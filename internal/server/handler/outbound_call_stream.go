@@ -181,8 +181,6 @@ func (h *Handler) OutboundCallStream(c *gin.Context) {
 }
 
 func sendInitialConfig(ctx context.Context, conn *websocket.SafeConn, params map[string]string, firstMessage, prompt string, dynamicVariables map[string]any) {
-	logger.Debug("Get conversation_hash", logger.String("hash", params[conversationHash]))
-
 	config := InitialConfig{
 		Type:             "conversation_initiation_client_data",
 		DynamicVariables: dynamicVariables,
