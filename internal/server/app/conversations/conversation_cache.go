@@ -1,16 +1,23 @@
 package conversations
 
 import (
+	"errors"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
+	jsoniter "github.com/json-iterator/go"
 )
 
+var json = jsoniter.ConfigCompatibleWithStandardLibrary
+
 const (
-	firstMessageKey = "fm"
-	promptKey       = "prm"
-	deleteCache     = "delete"
-	callSid         = "sid"
+	conversationExistKey = "ch"
+	firstMessageKey      = "fm"
+	promptKey            = "prm"
+	deleteCache          = "delete"
+	dynamicVariablesKey  = "dv"
+	callSid              = "sid"
 )
 
 /*
@@ -20,29 +27,43 @@ const (
 		callSid             string
 		incomingPhoneNumber string
 		outgoingPhoneNumber string
+		dynamicVariablesKey string
 	}
 */
+
 func (s *Service) GenerateHash() string {
 	return strings.Replace(uuid.NewString(), "-", "", -1)
 }
 
-func (s *Service) CreateCache(conversationHash, firstMessage, prompt string) {
+func (s *Service) CreateCache(conversationHash, firstMessage, prompt string, DynamicVariables map[string]any) {
+	jsonData, _ := json.Marshal(DynamicVariables)
 	s.conversationCache(conversationHash, map[string]string{
-		firstMessageKey: firstMessage,
-		promptKey:       prompt,
+		conversationExistKey: "ok",
+		firstMessageKey:      firstMessage,
+		promptKey:            prompt,
+		dynamicVariablesKey:  string(jsonData),
 	})
 }
 
-func (s *Service) GetByHashFromCache(conversationHash string) (string, string) {
+func (s *Service) GetByHashFromCache(conversationHash string) (string, string, map[string]any, error) {
+	conversationExist := s.App.Cache.Prefix(conversationHash).Get(conversationExistKey)
+	if conversationExist == nil {
+		return "", "", nil, errors.New("conversation not found by hash")
+	}
 	firstMessage := s.App.Cache.Prefix(conversationHash).Get(firstMessageKey)
 	prompt := s.App.Cache.Prefix(conversationHash).Get(promptKey)
-	return firstMessage.(string), prompt.(string)
+	dynamicVariables := s.App.Cache.Prefix(conversationHash).Get(dynamicVariablesKey)
+	var dynamicVariablesMap map[string]any
+
+	_ = json.Unmarshal([]byte(dynamicVariables.(string)), &dynamicVariablesMap)
+	return firstMessage.(string), prompt.(string), dynamicVariablesMap, nil
 }
 
 func (s *Service) Delete(conversationHash string) {
 	s.conversationCache(conversationHash, map[string]string{
-		firstMessageKey: deleteCache,
-		promptKey:       deleteCache,
+		firstMessageKey:     deleteCache,
+		promptKey:           deleteCache,
+		dynamicVariablesKey: deleteCache,
 	})
 }
 
@@ -51,7 +72,7 @@ func (s *Service) conversationCache(conversationHash string, data map[string]str
 		if v == deleteCache {
 			s.App.Cache.Prefix(conversationHash).Delete(k)
 		} else {
-			s.App.Cache.Prefix(conversationHash).Set(k, v)
+			s.App.Cache.Prefix(conversationHash).SetWithTTL(k, v, time.Minute)
 		}
 	}
 }

@@ -6,6 +6,7 @@ import (
 	"ai-calls/internal/server/app/elevenlabs"
 	"ai-calls/internal/server/app/systemStatus"
 	"context"
+	"net/http"
 
 	websocket "ai-calls/internal/server/utils/webSocket"
 
@@ -80,6 +81,7 @@ type MessageFromTwilio struct {
 
 type InitialConfig struct {
 	Type                       string                     `json:"type"`
+	DynamicVariables           map[string]any             `json:"dynamic_variables,omitempty"`
 	ConversationConfigOverride ConversationConfigOverride `json:"conversation_config_override"`
 }
 
@@ -103,6 +105,17 @@ const (
 )
 
 func (h *Handler) OutboundCallStream(c *gin.Context) {
+	conversation := conversations.New(h.App)
+	conversationHash := c.Param("hash")
+	firstMessage, prompt, dynamicVariables, err := conversation.GetByHashFromCache(conversationHash)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": err,
+		})
+		return
+	}
+	conversation.Delete(conversationHash)
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	sysStatus := systemStatus.New(h.App)
@@ -147,7 +160,7 @@ func (h *Handler) OutboundCallStream(c *gin.Context) {
 			callSid = m.Start.CallSid
 			customParams = m.Start.CustomParameters
 			logger.Debug("[Twilio] Stream started", streamSid, callSid)
-			sendInitialConfig(ctx, h, elevenLabsConn, customParams)
+			sendInitialConfig(ctx, elevenLabsConn, customParams, firstMessage, prompt, dynamicVariables)
 
 		case "media":
 			if elevenLabsConn != nil {
@@ -167,13 +180,12 @@ func (h *Handler) OutboundCallStream(c *gin.Context) {
 	}
 }
 
-func sendInitialConfig(ctx context.Context, h *Handler, conn *websocket.SafeConn, params map[string]string) {
+func sendInitialConfig(ctx context.Context, conn *websocket.SafeConn, params map[string]string, firstMessage, prompt string, dynamicVariables map[string]any) {
 	logger.Debug("Get conversation_hash", logger.String("hash", params[conversationHash]))
-	conversation := conversations.New(h.App)
-	firstMessage, prompt := conversation.GetByHashFromCache(params[conversationHash])
-	defer conversation.Delete(params[conversationHash])
+
 	config := InitialConfig{
-		Type: "conversation_initiation_client_data",
+		Type:             "conversation_initiation_client_data",
+		DynamicVariables: dynamicVariables,
 		ConversationConfigOverride: ConversationConfigOverride{
 			Agent: Agent{
 				Prompt: Prompt{

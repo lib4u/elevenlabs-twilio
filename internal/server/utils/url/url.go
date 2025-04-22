@@ -29,6 +29,7 @@ func (s *URL) AddRouteToUrl(relativePath string) {
 	var pathNormalizer = strings.NewReplacer(
 		"-", ".",
 		"/", ".",
+		":", "%",
 	)
 	pathKey := pathNormalizer.Replace(relativePath)
 	s.RoutesMap[pathKey] = relativePath
@@ -56,13 +57,22 @@ func (s *URL) SetParam(key, value string) *URL {
 	return cloned
 }
 
-func (s *URL) GetRouteUrl(scheme, path string) string {
+func (s *URL) GetRouteUrl(scheme, path string, args ...string) string {
 	cloned := s.clone()
 	pathConverted := cloned.RoutesMap[fmt.Sprintf(".%s", path)]
+	parts := strings.Split(pathConverted, "/")
+	argIndex := 0
+	for i, part := range parts {
+		if strings.HasPrefix(part, ":") && argIndex < len(args) {
+			parts[i] = args[argIndex]
+			argIndex++
+		}
+	}
+	finalPath := strings.Join(parts, "/")
 
 	cloned.url.Scheme = scheme
 	cloned.url.Host = cloned.App.Config.Host
-	cloned.url.Path = pathConverted
+	cloned.url.Path = finalPath
 	cloned.url.RawQuery = cloned.values.Encode()
 
 	return cloned.url.String()

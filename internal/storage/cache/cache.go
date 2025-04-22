@@ -3,6 +3,7 @@ package cache
 import (
 	"ai-calls/internal/config"
 	"fmt"
+	"time"
 
 	"github.com/dgraph-io/ristretto/v2"
 )
@@ -52,6 +53,11 @@ func (c *Cache) getKeyWithPrefixOrRaw(key string) string {
 
 func (c *Cache) Set(key string, val any) {
 	c.db.Set(c.getKeyWithPrefixOrRaw(key), val, 1)
+	c.db.Wait()
+}
+
+func (c *Cache) SetWithTTL(key string, val any, ttl time.Duration) {
+	c.db.SetWithTTL(c.getKeyWithPrefixOrRaw(key), val, 1, ttl)
 	c.db.Wait()
 }
 

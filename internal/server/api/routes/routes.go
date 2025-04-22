@@ -46,9 +46,10 @@ func New(r *gin.Engine, u *url.URL, app *app.Application, h *handler.Handler) Ro
 
 func (s *Routes) LoadRoutes() *gin.Engine {
 
-	s.registerRoute("/calls/outbound/call", http.MethodPost, s.Handler.OutboundCall)
+	s.registerRoute("/calls/outbound/call/create", http.MethodPost, s.Handler.CreateOutboundCall)
 	s.registerRoute("/calls/outbound/call/twiml", http.MethodPost, s.Handler.OutboundCallTwiml)
-	s.registerRoute("/calls/outbound/call/stream", http.MethodGet, s.Handler.OutboundCallStream)
+	s.registerRoute("/calls/outbound/call/stream/:hash", http.MethodGet, s.Handler.OutboundCallStream)
+
 	s.registerRoute("/system/status", http.MethodGet, s.Handler.SystemStatus)
 	return s.r
 }
