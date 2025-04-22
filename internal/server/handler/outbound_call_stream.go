@@ -130,7 +130,6 @@ func (h *Handler) OutboundCallStream(c *gin.Context) {
 	sysStatus.AddWebSocketConnecionCount()
 
 	var streamSid, callSid string
-	var customParams = make(map[string]string)
 
 	eleven := elevenlabs.New(h.App)
 	signedUrl, _ := eleven.GetSignedUrl()
@@ -158,9 +157,8 @@ func (h *Handler) OutboundCallStream(c *gin.Context) {
 		case "start":
 			streamSid = m.Start.StreamSid
 			callSid = m.Start.CallSid
-			customParams = m.Start.CustomParameters
 			logger.Debug("[Twilio] Stream started", streamSid, callSid)
-			sendInitialConfig(ctx, elevenLabsConn, customParams, firstMessage, prompt, dynamicVariables)
+			sendInitialConfig(ctx, elevenLabsConn, firstMessage, prompt, dynamicVariables)
 
 		case "media":
 			if elevenLabsConn != nil {
@@ -180,7 +178,7 @@ func (h *Handler) OutboundCallStream(c *gin.Context) {
 	}
 }
 
-func sendInitialConfig(ctx context.Context, conn *websocket.SafeConn, params map[string]string, firstMessage, prompt string, dynamicVariables map[string]any) {
+func sendInitialConfig(ctx context.Context, conn *websocket.SafeConn, firstMessage, prompt string, dynamicVariables map[string]any) {
 	config := InitialConfig{
 		Type:             "conversation_initiation_client_data",
 		DynamicVariables: dynamicVariables,
