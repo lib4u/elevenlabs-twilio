@@ -107,10 +107,11 @@ const (
 func (h *Handler) OutboundCallStream(c *gin.Context) {
 	conversation := conversations.New(h.App)
 	conversationHash := c.Param("hash")
-	firstMessage, prompt, dynamicVariables, err := conversation.GetByHashFromCache(conversationHash)
+	firstMessage, prompt, callSidConv, dynamicVariables, err := conversation.GetByHashFromCache(conversationHash)
 	if err != nil {
+		logger.Error("Conversation failed", logger.Any("err", err))
 		c.JSON(http.StatusBadRequest, gin.H{
-			"error": err,
+			"error": "conversation error",
 		})
 		return
 	}
@@ -133,7 +134,7 @@ func (h *Handler) OutboundCallStream(c *gin.Context) {
 
 	eleven := elevenlabs.New(h.App)
 	signedUrl, _ := eleven.GetSignedUrl()
-	elevenLabsConn, _, err := websocket.NewClient(h.App.Config, ctx, signedUrl, nil)
+	elevenLabsConn, _, err := websocket.NewClient(ctx, h.App.Config, signedUrl, nil)
 	elevenLabsConn.SetConnectName(ElevenLabsWs)
 	if err != nil {
 		logger.Error("[ElevenLabs] connection error:", logger.Any("err", err))
@@ -157,6 +158,11 @@ func (h *Handler) OutboundCallStream(c *gin.Context) {
 		case "start":
 			streamSid = m.Start.StreamSid
 			callSid = m.Start.CallSid
+			if callSidConv != callSid {
+				logger.Error("Wrong Conversation")
+				cancel()
+				break
+			}
 			logger.Debug("[Twilio] Stream started", streamSid, callSid)
 			sendInitialConfig(ctx, elevenLabsConn, firstMessage, prompt, dynamicVariables)
 
@@ -259,7 +265,7 @@ func closeConnectionService(ctx context.Context, conn *websocket.SafeConn) {
 	if conn.IsClosed {
 		return
 	}
-	logger.Debug("websocket closed", logger.String("connection", conn.SessionName))
+	logger.Debug("websocket closed", logger.String("connection", conn.ConnectName()))
 	conn.Close(ctx)
 }
 

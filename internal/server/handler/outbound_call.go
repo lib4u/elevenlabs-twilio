@@ -58,7 +58,7 @@ func (h *Handler) CreateOutboundCall(c *gin.Context) {
 		})
 		return
 	}
-	conversation.CreateCache(conversationHash, callParams.FirstMessage, callParams.Prompt, callParams.DynamicVariables)
+	conversation.CreateCache(conversationHash, callParams.FirstMessage, callParams.Prompt, sid, callParams.DynamicVariables)
 	c.JSON(http.StatusOK, gin.H{
 		"success":           true,
 		"call_sid":          sid,

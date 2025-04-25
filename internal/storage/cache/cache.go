@@ -2,7 +2,6 @@ package cache
 
 import (
 	"ai-calls/internal/config"
-	"fmt"
 	"time"
 
 	"github.com/dgraph-io/ristretto/v2"
@@ -44,20 +43,20 @@ func (c *Cache) Prefix(prefix string) *Cache {
 	}
 }
 
-func (c *Cache) getKeyWithPrefixOrRaw(key string) string {
-	if c.prefix != "" {
-		return fmt.Sprintf("%s:%s", c.prefix, key)
-	}
-	return key
-}
-
 func (c *Cache) Set(key string, val any) {
-	c.db.Set(c.getKeyWithPrefixOrRaw(key), val, 1)
+	c.set(key, val)
 	c.db.Wait()
 }
 
 func (c *Cache) SetWithTTL(key string, val any, ttl time.Duration) {
-	c.db.SetWithTTL(c.getKeyWithPrefixOrRaw(key), val, 1, ttl)
+	c.setWithTTL(key, val, ttl)
+	c.db.Wait()
+}
+
+func (c *Cache) SetManyWithTTL(data map[string]any, ttl time.Duration) {
+	for k, v := range data {
+		c.setWithTTL(k, v, ttl)
+	}
 	c.db.Wait()
 }
 
@@ -77,4 +76,25 @@ func (c *Cache) GetValueAndDelete(key string) any {
 
 func (c *Cache) Delete(key string) {
 	c.db.Del(c.getKeyWithPrefixOrRaw(key))
+}
+
+func (c *Cache) DeleteMany(keys []string) {
+	for _, k := range keys {
+		c.db.Del(c.getKeyWithPrefixOrRaw(k))
+	}
+}
+
+func (c *Cache) set(key string, val any) bool {
+	return c.db.Set(c.getKeyWithPrefixOrRaw(key), val, 1)
+}
+
+func (c *Cache) setWithTTL(key string, val any, ttl time.Duration) bool {
+	return c.db.SetWithTTL(c.getKeyWithPrefixOrRaw(key), val, 1, ttl)
+}
+
+func (c *Cache) getKeyWithPrefixOrRaw(key string) string {
+	if c.prefix != "" {
+		return c.prefix + ":" + key
+	}
+	return key
 }

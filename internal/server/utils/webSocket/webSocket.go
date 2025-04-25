@@ -12,15 +12,15 @@ import (
 var json = jsoniter.ConfigCompatibleWithStandardLibrary
 
 type SafeConn struct {
-	Conn        *websocket.Conn
+	conn        *websocket.Conn
 	SessionName string
 	IsClosed    bool
-	Config      *config.Config
+	config      *config.Config
 }
 
 func newSocket(conn *websocket.Conn, config *config.Config) *SafeConn {
 	conn.SetReadLimit(config.WebSocket.ReadLimit)
-	return &SafeConn{Conn: conn, Config: config}
+	return &SafeConn{conn: conn, config: config}
 }
 
 func NewServer(config *config.Config, w http.ResponseWriter, r *http.Request, responseHeader http.Header) (*SafeConn, error) {
@@ -31,7 +31,7 @@ func NewServer(config *config.Config, w http.ResponseWriter, r *http.Request, re
 	return newSocket(conn, config), nil
 }
 
-func NewClient(config *config.Config, ctx context.Context, urlStr string, requestHeader http.Header) (*SafeConn, *http.Response, error) {
+func NewClient(ctx context.Context, config *config.Config, urlStr string, requestHeader http.Header) (*SafeConn, *http.Response, error) {
 	conn, response, err := websocket.Dial(ctx, urlStr, nil)
 	if err != nil {
 		return nil, nil, err
@@ -41,7 +41,7 @@ func NewClient(config *config.Config, ctx context.Context, urlStr string, reques
 }
 
 func (s *SafeConn) WriteMessage(ctx context.Context, data []byte) error {
-	return s.Conn.Write(ctx, websocket.MessageText, data)
+	return s.conn.Write(ctx, websocket.MessageText, data)
 }
 
 func (s *SafeConn) WriteJsonMessage(ctx context.Context, data any) error {
@@ -49,15 +49,15 @@ func (s *SafeConn) WriteJsonMessage(ctx context.Context, data any) error {
 	if err != nil {
 		return err
 	}
-	return s.Conn.Write(ctx, websocket.MessageText, jsonData)
+	return s.conn.Write(ctx, websocket.MessageText, jsonData)
 }
 
 func (s *SafeConn) ReadMessage(ctx context.Context) (websocket.MessageType, []byte, error) {
-	return s.Conn.Read(ctx)
+	return s.conn.Read(ctx)
 }
 
 func (s *SafeConn) ReadJsonMessage(ctx context.Context, data any) error {
-	_, msg, err := s.Conn.Read(ctx)
+	_, msg, err := s.conn.Read(ctx)
 	if err != nil {
 		return err
 	}
@@ -73,7 +73,11 @@ func (s *SafeConn) SetConnectName(name string) *SafeConn {
 	return s
 }
 
+func (s *SafeConn) ConnectName() string {
+	return s.SessionName
+}
+
 func (s *SafeConn) Close(ctx context.Context) error {
 	s.IsClosed = true
-	return s.Conn.Close(websocket.StatusNormalClosure, "")
+	return s.conn.Close(websocket.StatusNormalClosure, "")
 }
