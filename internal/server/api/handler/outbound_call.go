@@ -72,7 +72,7 @@ func (h *Handler) OutboundCallTwiml(c *gin.Context) {
 	response := Response{
 		Connect: Connect{
 			Stream: Stream{
-				URL: h.URL.GetRouteUrl("wss", "calls.outbound.call.stream.%hash", conversationHash),
+				URL: h.URL.GetRouteUrl("wss", "calls.media.stream.%hash", conversationHash),
 				Parameters: []Parameter{
 					{Name: "conversation_hash", Value: conversationHash},
 				},

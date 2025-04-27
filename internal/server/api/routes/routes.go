@@ -3,10 +3,11 @@ package routes
 import (
 	"ai-calls/internal/logger"
 	"ai-calls/internal/server/app"
+	"ai-calls/internal/server/middleware"
 	"ai-calls/internal/server/utils/url"
 	"net/http"
 
-	"ai-calls/internal/server/handler"
+	"ai-calls/internal/server/api/handler"
 
 	"github.com/gin-gonic/gin"
 )
@@ -27,7 +28,7 @@ func New(r *gin.Engine, u *url.URL, app *app.Application, h *handler.Handler) Ro
 	r.Use(
 		gin.Recovery(),
 		gin.Logger(),
-		corsMiddleware,
+		middleware.ApiCors,
 	)
 	if len(app.Config.HTTPServer.TrustedProxies) != 0 {
 		err := r.SetTrustedProxies(app.Config.HTTPServer.TrustedProxies)
@@ -48,7 +49,7 @@ func (s *Routes) LoadRoutes() *gin.Engine {
 
 	s.registerRoute("/calls/outbound/call/create", http.MethodPost, s.Handler.CreateOutboundCall)
 	s.registerRoute("/calls/outbound/call/twiml", http.MethodPost, s.Handler.OutboundCallTwiml)
-	s.registerRoute("/calls/outbound/call/stream/:hash", http.MethodGet, s.Handler.OutboundCallStream)
+	s.registerRoute("/calls/media/stream/:hash", http.MethodGet, s.Handler.OutboundCallStream)
 
 	s.registerRoute("/system/status", http.MethodGet, s.Handler.SystemStatus)
 	return s.r

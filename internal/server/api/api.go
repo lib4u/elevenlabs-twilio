@@ -2,9 +2,9 @@ package api
 
 import (
 	"ai-calls/internal/logger"
+	"ai-calls/internal/server/api/handler"
 	"ai-calls/internal/server/api/routes"
 	"ai-calls/internal/server/app"
-	"ai-calls/internal/server/handler"
 	"ai-calls/internal/server/utils/url"
 	"fmt"
 

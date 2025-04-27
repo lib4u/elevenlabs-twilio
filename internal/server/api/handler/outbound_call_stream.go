@@ -79,25 +79,6 @@ type MessageFromTwilio struct {
 	} `json:"media"`
 }
 
-type InitialConfig struct {
-	Type                       string                     `json:"type"`
-	DynamicVariables           map[string]any             `json:"dynamic_variables,omitempty"`
-	ConversationConfigOverride ConversationConfigOverride `json:"conversation_config_override"`
-}
-
-type ConversationConfigOverride struct {
-	Agent Agent `json:"agent"`
-}
-
-type Agent struct {
-	Prompt       Prompt `json:"prompt"`
-	FirstMessage string `json:"first_message"`
-}
-
-type Prompt struct {
-	Prompt string `json:"prompt"`
-}
-
 const (
 	ElevenLabsWs     = "ElevenLabs"
 	TwilioWs         = "Twilio"
@@ -105,6 +86,7 @@ const (
 )
 
 func (h *Handler) OutboundCallStream(c *gin.Context) {
+	sysStatus := systemStatus.New(h.App)
 	conversation := conversations.New(h.App)
 	conversationHash := c.Param("hash")
 	firstMessage, prompt, callSidConv, dynamicVariables, err := conversation.GetByHashFromCache(conversationHash)
@@ -119,7 +101,6 @@ func (h *Handler) OutboundCallStream(c *gin.Context) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	sysStatus := systemStatus.New(h.App)
 	twilioConn, err := websocket.NewServer(h.App.Config, c.Writer, c.Request, nil)
 	twilioConn.SetConnectName(TwilioWs)
 	if err != nil {
@@ -133,7 +114,13 @@ func (h *Handler) OutboundCallStream(c *gin.Context) {
 	var streamSid, callSid string
 
 	eleven := elevenlabs.New(h.App)
-	signedUrl, _ := eleven.GetSignedUrl()
+	signedUrl, err := eleven.GetSignedUrl()
+	if err != nil {
+		cancel()
+		logger.Error("[ElevenLabs] get sign url failed:", logger.Any("err", err))
+		return
+	}
+
 	elevenLabsConn, _, err := websocket.NewClient(ctx, h.App.Config, signedUrl, nil)
 	elevenLabsConn.SetConnectName(ElevenLabsWs)
 	if err != nil {
@@ -164,7 +151,12 @@ func (h *Handler) OutboundCallStream(c *gin.Context) {
 				break
 			}
 			logger.Debug("[Twilio] Stream started", streamSid, callSid)
-			sendInitialConfig(ctx, elevenLabsConn, firstMessage, prompt, dynamicVariables)
+			elevenlabsInitialConfig := eleven.GenerateElevenLabsConfig(firstMessage, prompt, dynamicVariables)
+			err := elevenLabsConn.WriteJsonMessage(ctx, elevenlabsInitialConfig)
+			if err != nil {
+				logger.Error("Initial Config error:", logger.Any("err", err))
+				return
+			}
 
 		case "media":
 			if elevenLabsConn != nil {
@@ -181,26 +173,6 @@ func (h *Handler) OutboundCallStream(c *gin.Context) {
 			cancel()
 			return
 		}
-	}
-}
-
-func sendInitialConfig(ctx context.Context, conn *websocket.SafeConn, firstMessage, prompt string, dynamicVariables map[string]any) {
-	config := InitialConfig{
-		Type:             "conversation_initiation_client_data",
-		DynamicVariables: dynamicVariables,
-		ConversationConfigOverride: ConversationConfigOverride{
-			Agent: Agent{
-				Prompt: Prompt{
-					Prompt: prompt,
-				},
-				FirstMessage: firstMessage,
-			},
-		},
-	}
-	err := conn.WriteJsonMessage(ctx, config)
-	if err != nil {
-		logger.Error("Initial Config error:", logger.Any("err", err))
-		return
 	}
 }
 
