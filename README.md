@@ -1,4 +1,3 @@
-# Go elevenlabs-twilio call integration
 # 📞 Go ElevenLabs-Twilio Integration
 
 This project is a voice assistant implementation in Go that integrates **Twilio Voice API** with **ElevenLabs**. It initiates an outbound call using Twilio, connects to **Media Streams**, and forwards the audio stream to **ElevenLabs** via WebSocket. It also receives real-time speech transcription.
